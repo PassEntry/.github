@@ -1,3 +1,5 @@
-# PassEntry
+# Github Org Conventions
 
-The global digital pass issuance company that bridges the gap between your physical wallet and your digital wallet.
+This repo allows us to manage org wide conventions for the github org.
+
+Article: https://www.freecodecamp.org/news/how-to-use-the-dot-github-repository/
