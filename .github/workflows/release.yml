@@ -28,7 +28,7 @@ jobs:
       - uses: actions/checkout@v6
       - name: Semantic Release
         id: semantic-release
-        uses: cycjimmy/semantic-release-action@fd0b87f65a07737c77504784251dffa0d26c79d2
+        uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
           extra_plugins: |
             conventional-changelog-conventionalcommits
