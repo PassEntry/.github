@@ -1,0 +1,141 @@
+name: Release (reusable)
+
+on:
+  workflow_call:
+    outputs:
+      last_version:
+        value: ${{ jobs.release.outputs.last_version }}
+      version:
+        value: ${{ jobs.release.outputs.version }}
+      tag:
+        value: ${{ jobs.release.outputs.tag }}
+      released:
+        value: ${{ jobs.release.outputs.released }}
+      release_notes:
+        value: ${{ jobs.release.outputs.release_notes }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+      issues: write
+      pull-requests: write
+    steps:
+    - uses: actions/checkout@v6
+    - name: Semantic Release
+      id: semantic-release
+      uses: cycjimmy/semantic-release-action@v6
+      with:
+        extra_plugins: |
+          conventional-changelog-conventionalcommits
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      last_version: ${{ steps.semantic-release.outputs.last_release_version }}
+      version: ${{ steps.semantic-release.outputs.new_release_version }}
+      tag: ${{ steps.semantic-release.outputs.new_release_git_tag }}
+      released: ${{ steps.semantic-release.outputs.new_release_published }}
+      release_notes: ${{ steps.semantic-release.outputs.new_release_notes }}
+
+  release-pr-dry-run:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: write
+      packages: write
+      actions: read
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        ref: ${{ github.base_ref }}
+        fetch-depth: 0
+    - name: Require PR branch up to date with base
+      run: |
+        git config --global user.name github-actions
+        git config --global user.email github-actions@github.com
+        git merge --no-ff origin/${{ github.event.pull_request.head.ref }} --message "${{ github.event.pull_request.title }}"
+    - name: Semantic Release
+      id: semantic-release
+      uses: cycjimmy/semantic-release-action@v6
+      with:
+        extra_plugins: |
+          conventional-changelog-conventionalcommits
+        branches: |
+          ${{ github.event_name == 'pull_request' && format('[''main'', ''{0}'']', github.head_ref) || '["main"]' }}
+        dry_run: true
+        unset_gha_env: true
+        ci: false
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    outputs:
+      last_version: ${{ steps.semantic-release.outputs.last_release_version }}
+      version: ${{ steps.semantic-release.outputs.new_release_version }}
+      tag: ${{ steps.semantic-release.outputs.new_release_git_tag }}
+      released: ${{ steps.semantic-release.outputs.new_release_published }}
+      release_notes: ${{ steps.semantic-release.outputs.new_release_notes }}
+
+  release-check:
+    needs: release-pr-dry-run
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Remove all previous comments from PR
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const issue_number = context.payload.pull_request.number;
+          const repo = context.repo;
+          const comments = await github.rest.issues.listComments({
+            owner: repo.owner,
+            repo: repo.repo,
+            issue_number: issue_number
+          });
+          for (const comment of comments.data) {
+            if (comment.body.includes('RELEASE INFO:')) {
+              await github.rest.issues.deleteComment({
+                owner: repo.owner,
+                repo: repo.repo,
+                comment_id: comment.id
+              });
+            }
+          }
+    - name: Comment if release job failed
+      if: needs.release-pr-dry-run.result == 'failure'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.payload.pull_request.number,
+            body: '❌ RELEASE INFO: **Release could not be determined**\n\nA release cannot be created from this PR as configured. Please **rebase onto `main`** and ensure commits follow your conventional-commit rules.'
+          });
+    - name: Comment Release
+      if: needs.release-pr-dry-run.result == 'success'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const tag = ${{ toJSON(needs.release-pr-dry-run.outputs.tag) }};
+          const version = ${{ toJSON(needs.release-pr-dry-run.outputs.version) }};
+          const releaseNotes = ${{ toJSON(needs.release-pr-dry-run.outputs.release_notes) }};
+          const lastVersion = ${{ toJSON(needs.release-pr-dry-run.outputs.last_version) }};
+          if (version !== "") {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `🎉 RELEASE INFO: **Proposed Release**\n\nVersion: ${version}\n\nprevious Version: ${lastVersion}\n\nGit Tag: ${tag}\n\nRelease Notes:\n${releaseNotes}`
+            })
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `❌ RELEASE INFO: **Release Failed**\n\n This PR will not trigger a release please check your commits`
+            })
+          }
