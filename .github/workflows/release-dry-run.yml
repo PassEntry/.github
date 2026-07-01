@@ -36,7 +36,7 @@ jobs:
         uses: cycjimmy/semantic-release-action@b12c8f6015dc215fe37bc154d4ad456dd3833c90 # v6.0.0
         with:
           extra_plugins: |
-            conventional-changelog-conventionalcommits
+            conventional-changelog-conventionalcommits@9.3.1
           branches: |
             ${{ github.event_name == 'pull_request' && format('[''main'', ''{0}'']', github.head_ref) || '["main"]' }}
           dry_run: true
