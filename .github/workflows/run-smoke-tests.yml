@@ -1,0 +1,128 @@
+name: Run smoke tests
+
+on:
+    workflow_call:
+        inputs:
+            app:
+                description: Product being smoked; sets APP in the alert text (e.g. api, frontend).
+                required: true
+                type: string
+            release_tag:
+                description: Release tag of the deploy under test. Used for the run id, the trace prefix and the release link in Slack.
+                required: true
+                type: string
+            e2e_base_url:
+                description: FE the suite drives. Must include the scheme — the entrypoint curls it and Playwright uses it as baseURL.
+                required: true
+                type: string
+            e2e_api_url:
+                description: API the suite talks to directly. Optional; the entrypoint defaults it to empty.
+                required: false
+                type: string
+                default: ""
+            s3_bucket:
+                description: Bucket the entrypoint uploads traces to on failure.
+                required: false
+                type: string
+                default: passentry-smoke-traces
+
+        outputs:
+            smoke_tests_passed:
+                value: ${{ jobs.run-smoke-tests.outputs.smoke_tests_passed }}
+
+jobs:
+    run-smoke-tests:
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        permissions:
+            id-token: write
+            contents: read
+        outputs:
+            smoke_tests_passed: ${{ steps.smoke.outputs.smoke_tests_passed }}
+
+        steps:
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  role-to-assume: ${{ secrets.AWS_SHARED_ROLE_TO_ASSUME }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Log in to Amazon ECR
+              id: login-ecr
+              uses: aws-actions/amazon-ecr-login@v2
+
+            - name: Pull latest smoke image
+              run: |
+                  IMAGE="${{ steps.login-ecr.outputs.registry }}/passentry-e2e:latest"
+                  docker pull "$IMAGE"
+                  echo "SMOKE_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+                  echo "Pulled $IMAGE (digest: $(docker inspect --format '{{ index .RepoDigests 0 }}' "$IMAGE"))"
+
+            - name: Run smoke suite
+              id: smoke
+              env:
+                  SMOKE_RUN_ID: ${{ inputs.app }}-${{ inputs.release_tag }}-${{ github.run_attempt }}
+                  APP: ${{ inputs.app }}
+                  E2E_BASE_URL: ${{ inputs.e2e_base_url }}
+                  E2E_API_URL: ${{ inputs.e2e_api_url }}
+                  SMOKE_USER_EMAIL: ${{ secrets.SMOKE_USER_EMAIL }}
+                  SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD }}
+                  S3_BUCKET: ${{ inputs.s3_bucket }}
+                  # Bot token + channel give threaded failure output; the webhook is the
+                  # non-threaded fallback the entrypoint uses when they're absent.
+                  SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN_E2E }}
+                  SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_E2E }}
+                  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_E2E }}
+                  RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+                  SOURCE_REPO: ${{ github.repository }}
+                  DEPLOY_SHA: ${{ inputs.release_tag }}
+                  AWS_REGION: ${{ secrets.AWS_REGION }}
+                  AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+              run: |
+                  docker run --rm \
+                      -e SMOKE_RUN_ID \
+                      -e APP \
+                      -e E2E_BASE_URL \
+                      -e E2E_API_URL \
+                      -e SMOKE_USER_EMAIL \
+                      -e SMOKE_USER_PASSWORD \
+                      -e S3_BUCKET \
+                      -e SLACK_BOT_TOKEN \
+                      -e SLACK_CHANNEL \
+                      -e SLACK_WEBHOOK_URL \
+                      -e RUN_URL \
+                      -e SOURCE_REPO \
+                      -e DEPLOY_SHA \
+                      -e AWS_REGION \
+                      -e AWS_DEFAULT_REGION \
+                      -e AWS_ACCESS_KEY_ID \
+                      -e AWS_SECRET_ACCESS_KEY \
+                      -e AWS_SESSION_TOKEN \
+                      -v "$PWD/playwright-report:/app/playwright-report" \
+                      -v "$PWD/test-results:/app/test-results" \
+                      "$SMOKE_IMAGE"
+                  SUITE_EXIT=$?
+                  set -e
+
+                  # Recorded as an output before the step fails, so the caller can gate
+                  # a traffic flip or a rollback on it via `if: always()`.
+                  if [[ "$SUITE_EXIT" -eq 0 ]]; then
+                      echo "smoke_tests_passed=true" >> "$GITHUB_OUTPUT"
+                  else
+                      echo "smoke_tests_passed=false" >> "$GITHUB_OUTPUT"
+                      echo "::error::Smoke suite failed (exit ${SUITE_EXIT})"
+                  fi
+                  exit "$SUITE_EXIT"
+
+            - name: Upload Playwright report
+              if: failure()
+              uses: actions/upload-artifact@v4
+              with:
+                  name: playwright-report-${{ github.run_id }}
+                  path: |
+                      playwright-report/
+                      test-results/
+                  retention-days: 7
