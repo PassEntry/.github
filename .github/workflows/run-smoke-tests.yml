@@ -15,16 +15,30 @@ on:
                 description: FE the suite drives. Must include the scheme — the entrypoint curls it and Playwright uses it as baseURL.
                 required: true
                 type: string
-            e2e_api_url:
-                description: API the suite talks to directly. Optional; the entrypoint defaults it to empty.
-                required: false
+            slack_channel:
+                description: Slack channel to send the alert to.
+                required: true
                 type: string
-                default: ""
-            s3_bucket:
-                description: Bucket the entrypoint uploads traces to on failure.
-                required: false
-                type: string
-                default: passentry-smoke-traces
+        secrets:
+            slack_bot_token:
+                description: Slack bot token to send the alert to.
+                required: true
+            slack_webhook_url:
+                description: Slack webhook url to send the alert to.
+                required: true
+            aws_shared_role_to_assume:
+                description: AWS shared role to assume to run the smoke tests.
+                required: true
+            aws_region:
+                description: AWS region to run the smoke tests in.
+                required: true
+
+            smoke_user_email:
+                description: Email of the smoke user to run the smoke tests as.
+                required: true
+            smoke_user_password:
+                description: Password of the smoke user to run the smoke tests as.
+                required: true
 
         outputs:
             smoke_tests_passed:
@@ -71,16 +85,12 @@ jobs:
                   # Bot token + channel give threaded failure output; the webhook is the
                   # non-threaded fallback the entrypoint uses when they're absent.
                   SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN_E2E }}
-                  SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL_E2E }}
                   SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_E2E }}
                   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   SOURCE_REPO: ${{ github.repository }}
                   DEPLOY_SHA: ${{ inputs.release_tag }}
                   AWS_REGION: ${{ secrets.AWS_REGION }}
                   AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
-                  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-                  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-                  AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
               run: |
                   docker run --rm \
                       -e SMOKE_RUN_ID \
