@@ -75,7 +75,7 @@ jobs:
             - name: Run smoke suite
               id: smoke
               env:
-                  SMOKE_RUN_ID: ${{ inputs.app }}-${{ inputs.release_tag }}-${{ github.run_attempt }}
+                  SMOKE_RUN_ID: ${{ inputs.release_tag }}
                   APP: ${{ inputs.app }}
                   E2E_BASE_URL: ${{ inputs.e2e_base_url }}
                   E2E_API_URL: ${{ inputs.e2e_api_url }}
