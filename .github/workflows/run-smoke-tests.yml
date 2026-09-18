@@ -80,7 +80,7 @@ jobs:
                   E2E_BASE_URL: ${{ inputs.e2e_base_url }}
                   SMOKE_USER_EMAIL: ${{ secrets.smoke_user_email }}
                   SMOKE_USER_PASSWORD: ${{ secrets.smoke_user_password }}
-                  S3_BUCKET: passentry-smoke-failures
+                  S3_BUCKET: passentry-smoke-failures-terraform-shared-services-412381736218
                   # Bot token + channel give threaded failure output; the webhook is the
                   # non-threaded fallback the entrypoint uses when they're absent.
                   SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
