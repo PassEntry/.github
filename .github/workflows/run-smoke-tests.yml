@@ -78,13 +78,13 @@ jobs:
                   SMOKE_RUN_ID: ${{ inputs.release_tag }}
                   APP: ${{ inputs.app }}
                   E2E_BASE_URL: ${{ inputs.e2e_base_url }}
-                  SMOKE_USER_EMAIL: ${{ secrets.SMOKE_USER_EMAIL }}
-                  SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD }}
-                  S3_BUCKET: ${{ inputs.s3_bucket }}
+                  SMOKE_USER_EMAIL: ${{ secrets.smoke_user_email }}
+                  SMOKE_USER_PASSWORD: ${{ secrets.smoke_user_password }}
+                  S3_BUCKET: passentry-smoke-failures
                   # Bot token + channel give threaded failure output; the webhook is the
                   # non-threaded fallback the entrypoint uses when they're absent.
-                  SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN_E2E }}
-                  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL_E2E }}
+                  SLACK_BOT_TOKEN: ${{ secrets.slack_bot_token }}
+                  SLACK_WEBHOOK_URL: ${{ secrets.slack_webhook_url }}
                   RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
                   SOURCE_REPO: ${{ github.repository }}
                   DEPLOY_SHA: ${{ inputs.release_tag }}
@@ -110,7 +110,7 @@ jobs:
                       -e AWS_ACCESS_KEY_ID \
                       -e AWS_SECRET_ACCESS_KEY \
                       -e AWS_SESSION_TOKEN \
-                      -e S3_BUCKET=passentry-smoke-failures \
+                      -e S3_BUCKET \
                       -v "$PWD/playwright-report:/app/playwright-report" \
                       -v "$PWD/test-results:/app/test-results" \
                       "$SMOKE_IMAGE"
