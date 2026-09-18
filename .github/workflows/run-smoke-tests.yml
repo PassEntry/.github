@@ -78,7 +78,6 @@ jobs:
                   SMOKE_RUN_ID: ${{ inputs.release_tag }}
                   APP: ${{ inputs.app }}
                   E2E_BASE_URL: ${{ inputs.e2e_base_url }}
-                  E2E_API_URL: ${{ inputs.e2e_api_url }}
                   SMOKE_USER_EMAIL: ${{ secrets.SMOKE_USER_EMAIL }}
                   SMOKE_USER_PASSWORD: ${{ secrets.SMOKE_USER_PASSWORD }}
                   S3_BUCKET: ${{ inputs.s3_bucket }}
@@ -111,7 +110,7 @@ jobs:
                       -e AWS_ACCESS_KEY_ID \
                       -e AWS_SECRET_ACCESS_KEY \
                       -e AWS_SESSION_TOKEN \
-                      -e S3_BUCKET=passentry-smoke-traces \
+                      -e S3_BUCKET=passentry-smoke-failures \
                       -v "$PWD/playwright-report:/app/playwright-report" \
                       -v "$PWD/test-results:/app/test-results" \
                       "$SMOKE_IMAGE"
