@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "required": ["verdict", "summary", "tests_checked", "at_risk"],
+  "properties": {
+    "verdict": { "enum": ["likely_fine", "will_break"] },
+    "summary": { "type": "string" },
+    "tests_checked": { "type": "integer" },
+    "at_risk": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["test", "test_file", "test_line", "test_snippet", "change_file", "change_line", "change_snippet", "why", "confidence"],
+        "properties": {
+          "test": { "type": "string" },
+          "test_file": { "type": "string" },
+          "test_line": { "type": "integer" },
+          "test_snippet": { "type": "string" },
+          "change_file": { "type": "string" },
+          "change_line": { "type": "integer" },
+          "change_snippet": { "type": "string" },
+          "why": { "type": "string" },
+          "confidence": { "enum": ["high", "medium"] }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,101 @@
+name: E2E tripwire (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tripwire_ref:
+        description: Branch, tag or SHA of this repo to take the tripwire scripts and prompt from.
+        required: false
+        type: string
+        default: main
+      e2e_ref:
+        description: Branch, tag or SHA of passentry-e2e to check the diff against.
+        required: false
+        type: string
+        default: main
+    secrets:
+      anthropic_api_key:
+        required: true
+      e2e_deploy_key:
+        required: true
+
+concurrency:
+  group: tripwire-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  tripwire:
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      BASE_REF: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/checkout@v6
+        with:
+          repository: PassEntry/passentry-e2e
+          path: e2e
+          ref: ${{ inputs.e2e_ref }}
+          ssh-key: ${{ secrets.e2e_deploy_key }}
+
+      - uses: actions/checkout@v6
+        with:
+          repository: PassEntry/.github
+          path: tripwire-src
+          ref: ${{ inputs.tripwire_ref }}
+
+      - id: comment
+        run: tripwire-src/tripwire/comment.sh
+
+      - name: Wait 2 minutes for more pushes
+        if: github.run_attempt == '1'
+        run: sleep 120
+
+      - id: start
+        run: tripwire-src/tripwire/start.sh
+        env:
+          COMMENT_ID: ${{ steps.comment.outputs.comment_id }}
+
+      - id: schema
+        if: steps.start.outputs.skip != 'true'
+        run: echo "schema=$(jq -c . tripwire-src/tripwire/schema.json)" >> "$GITHUB_OUTPUT"
+
+      # Workaround for anthropics/claude-code-action#1901: the action's entrypoint markers get billing_error
+      - name: Install Claude Code without action markers
+        if: steps.start.outputs.skip != 'true'
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          printf '#!/bin/sh\nunset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_ACTION\nexec "%s" "$@"\n' "$HOME/.local/bin/claude" > "$RUNNER_TEMP/claude"
+          chmod +x "$RUNNER_TEMP/claude"
+
+      - id: tripwire
+        if: steps.start.outputs.skip != 'true'
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.anthropic_api_key }}
+          path_to_claude_code_executable: ${{ runner.temp }}/claude
+          github_token: ${{ github.token }}
+          prompt: "Follow tripwire-src/tripwire/prompt.md. The diff is in ./diff.patch and the changed file list is in ./changed-files.txt."
+          claude_args: |
+            --model claude-sonnet-5-5
+            --effort medium
+            --max-turns 40
+            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git show:*)"
+            --json-schema '${{ steps.schema.outputs.schema }}'
+
+      - if: always() && steps.comment.outputs.comment_id != '' && steps.start.outputs.skip != 'true'
+        run: tripwire-src/tripwire/post.sh
+        env:
+          COMMENT_ID: ${{ steps.comment.outputs.comment_id }}
+          RESULT: ${{ steps.tripwire.outputs.structured_output }}
+          JOB_STATUS: ${{ job.status }}
