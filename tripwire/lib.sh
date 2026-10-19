@@ -23,6 +23,7 @@ collapse_older() {
   while IFS=$'\t' read -r id encoded; do
     body=$(printf '%s' "$encoded" | base64 --decode)
     summary=$(printf '%s\n' "$body" | grep -v '^<!-- e2e-tripwire -->' | grep -v '^#' | grep -m1 . || echo "Earlier E2E tripwire check")
+    summary=$(printf '%s' "$summary" | sed -E 's/\*\*([^*]+)\*\*/<b>\1<\/b>/g; s/`([^`]+)`/<code>\1<\/code>/g')
     rest=$(printf '%s\n' "$body" | grep -v '^<!-- e2e-tripwire -->')
     gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" \
       -f body="$MARKER"$'\n'"<details><summary>$summary</summary>"$'\n\n'"$rest"$'\n\n</details>' > /dev/null
