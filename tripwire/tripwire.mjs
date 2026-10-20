@@ -1,7 +1,9 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 
-export const CONFIG = JSON.parse(readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
+const readJson = (file) => JSON.parse(readFileSync(new URL(file, import.meta.url), 'utf8'));
+
+export const CONFIG = readJson('./config.json');
 const { marker: MARKER, header: HEADER, botLogin: BOT_LOGIN, e2eRepo: E2E_REPO, waitSeconds: WAIT_SECONDS } = CONFIG;
 
 export function contextFromEnv(env, e2eSha = 'main') {
@@ -152,7 +154,7 @@ export async function config({ core }) {
   core.setOutput('max_turns', String(claude.maxTurns));
   core.setOutput('allowed_tools', claude.allowedTools);
   core.setOutput('disallowed_tools', claude.disallowedTools);
-  core.setOutput('result_schema', JSON.stringify(CONFIG.resultSchema));
+  core.setOutput('result_schema', JSON.stringify(readJson('./schema.json')));
 }
 
 function api(github, context, env) {
