@@ -11,3 +11,11 @@ Steps:
 5. If nothing conflicts, return verdict likely_fine with an empty at_risk list.
 
 Return JSON matching the schema. Set tests_checked to the number of tests you read that touch the changed code. The summary is shown to the PR author. In one or two plain sentences, say what the change touches and why it does or does not affect the E2E tests. Do not mention ./e2e, diff.patch, changed-files.txt or how you checked.
+
+For each at_risk entry:
+
+- test: the test's own title, exactly as written in its test() call, e.g. `rejects wrong password`. If the conflict is in a shared helper, use the helper's function name, e.g. `choosePreset`, and name the tests that call it in why. Never a description or a list.
+- One entry per conflicting test line. Do not report the same line twice.
+- change_snippet: copy the lines from diff.patch that cause the conflict, keeping their leading `-` and `+`, so both the old and the new line are shown. At most 10 lines.
+- test_snippet: the exact line or lines from the test or helper that will fail, copied as written. At most 10 lines.
+- why: one or two plain sentences.
