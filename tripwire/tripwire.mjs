@@ -1,17 +1,8 @@
 import { execFileSync } from 'node:child_process';
-import { writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 
-export const MARKER = '<!-- e2e-tripwire -->';
-export const HEADER = '# E2E Tripwire';
-const BOT_LOGIN = 'github-actions[bot]';
-const MAX_CHANGED_LINES = 5000;
-const DIFF_EXCLUDES = [
-  ':(exclude)package-lock.json',
-  ':(exclude)*.snap',
-  ':(exclude)*.lock',
-  ':(exclude)dist/**',
-  ':(exclude).env*',
-];
+export const CONFIG = JSON.parse(readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
+const { marker: MARKER, header: HEADER, botLogin: BOT_LOGIN, e2eRepo: E2E_REPO, waitSeconds: WAIT_SECONDS } = CONFIG;
 
 export function contextFromEnv(env, e2eSha = 'main') {
   const attempt = Number(env.GITHUB_RUN_ATTEMPT || 1);
@@ -22,14 +13,16 @@ export function contextFromEnv(env, e2eSha = 'main') {
     isRerun: attempt > 1,
     runUrl: `${server}/${env.GITHUB_REPOSITORY}/actions/runs/${env.GITHUB_RUN_ID}`,
     appUrl: `${server}/${env.GITHUB_REPOSITORY}/blob/${env.HEAD_SHA}`,
-    e2eUrl: `${server}/${env.GITHUB_REPOSITORY_OWNER}/passentry-e2e/blob/${e2eSha}`,
+    e2eUrl: `${server}/${E2E_REPO}/blob/${e2eSha}`,
   };
 }
 
 export const withHeader = (text) => `${MARKER}\n${HEADER}\n\n${text}`;
 
+const waitText = WAIT_SECONDS % 60 === 0 ? `${WAIT_SECONDS / 60} min` : `${WAIT_SECONDS} sec`;
+
 export const waitingBody = ({ sha }) =>
-  `⏸️ **Waiting 2 min before checking this PR up to \`${sha}\`** in case more pushes follow.`;
+  `⏸️ **Waiting ${waitText} before checking this PR up to \`${sha}\`** in case more pushes follow.`;
 
 export const checkingBody = ({ sha, rerun }) =>
   `⏳ **Checking this PR up to \`${sha}\` against the E2E suite${rerun}...** This takes a few minutes.`;
@@ -149,6 +142,19 @@ export function collapsedBody(body) {
   return `${MARKER}\n<details><summary>${summary}</summary>\n\n${rest}\n\n</details>`;
 }
 
+export async function config({ core }) {
+  const { claude } = CONFIG;
+  core.setOutput('e2e_repo', E2E_REPO);
+  core.setOutput('wait_seconds', String(WAIT_SECONDS));
+  core.setOutput('claude_code_version', claude.codeVersion);
+  core.setOutput('model', claude.model);
+  core.setOutput('effort', claude.effort);
+  core.setOutput('max_turns', String(claude.maxTurns));
+  core.setOutput('allowed_tools', claude.allowedTools);
+  core.setOutput('disallowed_tools', claude.disallowedTools);
+  core.setOutput('result_schema', JSON.stringify(CONFIG.resultSchema));
+}
+
 function api(github, context, env) {
   const { owner, repo } = context.repo;
   const issue_number = Number(env.PR_NUMBER);
@@ -183,7 +189,7 @@ export async function start({ github, context, core, env = process.env }) {
   await pr.update(commentId, withHeader(checkingBody(ctx)));
 
   const range = `origin/${env.BASE_REF}...${env.HEAD_SHA}`;
-  const paths = ['--', '.', ...DIFF_EXCLUDES];
+  const paths = ['--', '.', ...CONFIG.diffExcludes.map((pattern) => `:(exclude)${pattern}`)];
   writeFileSync('diff.patch', git(['diff', range, ...paths]));
   writeFileSync('changed-files.txt', git(['diff', '--name-only', range, ...paths]));
   const changed = git(['diff', '--numstat', range, ...paths])
@@ -194,7 +200,7 @@ export async function start({ github, context, core, env = process.env }) {
       return sum + (Number(added) || 0) + (Number(removed) || 0);
     }, 0);
 
-  if (changed > MAX_CHANGED_LINES) {
+  if (changed > CONFIG.maxChangedLines) {
     await pr.update(commentId, withHeader(tooLargeBody(ctx, changed)));
     core.setOutput('skip', 'true');
   }

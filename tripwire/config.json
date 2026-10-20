@@ -1,0 +1,95 @@
+{
+  "marker": "<!-- e2e-tripwire -->",
+  "header": "# E2E Tripwire",
+  "botLogin": "github-actions[bot]",
+  "e2eRepo": "PassEntry/passentry-e2e",
+  "waitSeconds": 120,
+  "maxChangedLines": 5000,
+  "diffExcludes": [
+    "package-lock.json",
+    "*.snap",
+    "*.lock",
+    "dist/**",
+    ".env*"
+  ],
+  "claude": {
+    "codeVersion": "2.1.304",
+    "model": "claude-sonnet-5-5",
+    "effort": "medium",
+    "maxTurns": 40,
+    "allowedTools": "Read,Grep,Glob,Bash(git show:*)",
+    "disallowedTools": "Read(**/.git/**)"
+  },
+  "resultSchema": {
+    "type": "object",
+    "required": [
+      "verdict",
+      "summary",
+      "tests_checked",
+      "at_risk"
+    ],
+    "properties": {
+      "verdict": {
+        "enum": [
+          "likely_fine",
+          "will_break"
+        ]
+      },
+      "summary": {
+        "type": "string"
+      },
+      "tests_checked": {
+        "type": "integer"
+      },
+      "at_risk": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": [
+            "test",
+            "test_file",
+            "test_line",
+            "test_snippet",
+            "change_file",
+            "change_line",
+            "change_snippet",
+            "why",
+            "confidence"
+          ],
+          "properties": {
+            "test": {
+              "type": "string"
+            },
+            "test_file": {
+              "type": "string"
+            },
+            "test_line": {
+              "type": "integer"
+            },
+            "test_snippet": {
+              "type": "string"
+            },
+            "change_file": {
+              "type": "string"
+            },
+            "change_line": {
+              "type": "integer"
+            },
+            "change_snippet": {
+              "type": "string"
+            },
+            "why": {
+              "type": "string"
+            },
+            "confidence": {
+              "enum": [
+                "high",
+                "medium"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}
