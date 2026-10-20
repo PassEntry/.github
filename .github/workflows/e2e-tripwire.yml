@@ -57,14 +57,6 @@ jobs:
           ref: ${{ inputs.tripwire_ref }}
           persist-credentials: false
 
-      - name: Check no credentials are left on the runner
-        run: |
-          echo "app .git/config auth: $(git config --get-regexp '^http\..*extraheader' >/dev/null && echo PRESENT || echo none)"
-          echo "e2e .git/config sshCommand: $(git -C e2e config --get core.sshCommand >/dev/null && echo PRESENT || echo none)"
-          echo "tripwire-src .git/config auth: $(git -C tripwire-src config --get-regexp '^http\..*extraheader' >/dev/null && echo PRESENT || echo none)"
-          echo "key-like files under RUNNER_TEMP:"
-          find "$RUNNER_TEMP" -maxdepth 3 -type f \( -name '*key*' -o -name '*ssh*' -o -name '*credential*' -o -name 'known_hosts*' \) -printf '  %p\n' || true
-
       - id: comment
         run: tripwire-src/tripwire/comment.sh
 
@@ -104,12 +96,6 @@ jobs:
             --allowedTools "Read,Grep,Glob,Bash(git show:*)"
             --disallowedTools "Read(**/.git/**)"
             --json-schema '${{ steps.schema.outputs.schema }}'
-
-      - name: Check credentials after the Claude step
-        if: always()
-        run: |
-          echo "app remote URL has credentials: $(git remote get-url origin | grep -q '@' && echo PRESENT || echo none)"
-          echo "app .git/config auth: $(git config --get-regexp '^http\..*extraheader' >/dev/null && echo PRESENT || echo none)"
 
       - if: always() && steps.comment.outputs.comment_id != '' && steps.start.outputs.skip != 'true'
         run: tripwire-src/tripwire/post.sh
