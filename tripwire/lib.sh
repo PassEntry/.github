@@ -19,7 +19,7 @@ set_comment() {
 
 collapse_older() {
   gh api "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" --paginate \
-    --jq ".[] | select(.body | contains(\"$MARKER\")) | select((.id | tostring) != \"$COMMENT_ID\") | select(.body | contains(\"<details>\") | not) | \"\(.id)\t\(.body | @base64)\"" |
+    --jq ".[] | select(.user.login == \"github-actions[bot]\") | select(.body | contains(\"$MARKER\")) | select((.id | tostring) != \"$COMMENT_ID\") | select(.body | contains(\"<details>\") | not) | \"\(.id)\t\(.body | @base64)\"" |
   while IFS=$'\t' read -r id encoded; do
     body=$(printf '%s' "$encoded" | base64 --decode)
     summary=$(printf '%s\n' "$body" | grep -v '^<!-- e2e-tripwire -->' | grep -v '^#' | grep -m1 . || echo "Earlier E2E tripwire check")
