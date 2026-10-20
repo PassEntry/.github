@@ -32,7 +32,6 @@ jobs:
       contents: read
       pull-requests: write
     env:
-      GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
       HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       BASE_REF: ${{ github.base_ref }}
@@ -58,14 +57,22 @@ jobs:
           persist-credentials: false
 
       - id: comment
-        run: tripwire-src/tripwire/comment.sh
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { comment } = await import(`${process.env.GITHUB_WORKSPACE}/tripwire-src/tripwire/tripwire.mjs`);
+            await comment({ github, context, core });
 
       - name: Wait 2 minutes for more pushes
         if: github.run_attempt == '1'
         run: sleep 120
 
       - id: start
-        run: tripwire-src/tripwire/start.sh
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { start } = await import(`${process.env.GITHUB_WORKSPACE}/tripwire-src/tripwire/tripwire.mjs`);
+            await start({ github, context, core });
         env:
           COMMENT_ID: ${{ steps.comment.outputs.comment_id }}
 
@@ -98,7 +105,11 @@ jobs:
             --json-schema '${{ steps.schema.outputs.schema }}'
 
       - if: always() && steps.comment.outputs.comment_id != '' && steps.start.outputs.skip != 'true'
-        run: tripwire-src/tripwire/post.sh
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { post } = await import(`${process.env.GITHUB_WORKSPACE}/tripwire-src/tripwire/tripwire.mjs`);
+            await post({ github, context, core });
         env:
           COMMENT_ID: ${{ steps.comment.outputs.comment_id }}
           RESULT: ${{ steps.tripwire.outputs.structured_output }}
