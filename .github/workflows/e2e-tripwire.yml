@@ -43,17 +43,24 @@ jobs:
 
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
         with:
-          repository: PassEntry/passentry-e2e
-          path: e2e
-          ref: ${{ inputs.e2e_ref }}
-          ssh-key: ${{ secrets.e2e_deploy_key }}
-          persist-credentials: false
-
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
-        with:
           repository: PassEntry/.github
           path: tripwire-src
           ref: ${{ inputs.tripwire_ref }}
+          persist-credentials: false
+
+      - id: config
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const { config } = await import(`${process.env.GITHUB_WORKSPACE}/tripwire-src/tripwire/tripwire.mjs`);
+            await config({ github, context, core });
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          repository: ${{ steps.config.outputs.e2e_repo }}
+          path: e2e
+          ref: ${{ inputs.e2e_ref }}
+          ssh-key: ${{ secrets.e2e_deploy_key }}
           persist-credentials: false
 
       - id: comment
@@ -63,9 +70,11 @@ jobs:
             const { comment } = await import(`${process.env.GITHUB_WORKSPACE}/tripwire-src/tripwire/tripwire.mjs`);
             await comment({ github, context, core });
 
-      - name: Wait 2 minutes for more pushes
+      - name: Wait for more pushes
         if: github.run_attempt == '1'
-        run: sleep 120
+        run: sleep "$WAIT_SECONDS"
+        env:
+          WAIT_SECONDS: ${{ steps.config.outputs.wait_seconds }}
 
       - id: start
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -76,17 +85,15 @@ jobs:
         env:
           COMMENT_ID: ${{ steps.comment.outputs.comment_id }}
 
-      - id: schema
-        if: steps.start.outputs.skip != 'true'
-        run: echo "schema=$(jq -c . tripwire-src/tripwire/schema.json)" >> "$GITHUB_OUTPUT"
-
       # Workaround for anthropics/claude-code-action#1901: the action's entrypoint markers get billing_error
       - name: Install Claude Code without action markers
         if: steps.start.outputs.skip != 'true'
         run: |
-          npm install -g @anthropic-ai/claude-code@2.1.304
+          npm install -g "@anthropic-ai/claude-code@$CLAUDE_CODE_VERSION"
           printf '#!/bin/sh\nunset CLAUDE_CODE_ENTRYPOINT CLAUDE_CODE_ACTION\nexec "%s" "$@"\n' "$(npm prefix -g)/bin/claude" > "$RUNNER_TEMP/claude"
           chmod +x "$RUNNER_TEMP/claude"
+        env:
+          CLAUDE_CODE_VERSION: ${{ steps.config.outputs.claude_code_version }}
 
       - id: tripwire
         if: steps.start.outputs.skip != 'true'
@@ -97,12 +104,12 @@ jobs:
           github_token: ${{ github.token }}
           prompt: "Follow tripwire-src/tripwire/prompt.md. The diff is in ./diff.patch and the changed file list is in ./changed-files.txt."
           claude_args: |
-            --model claude-sonnet-5-5
-            --effort medium
-            --max-turns 40
-            --allowedTools "Read,Grep,Glob,Bash(git show:*)"
-            --disallowedTools "Read(**/.git/**)"
-            --json-schema '${{ steps.schema.outputs.schema }}'
+            --model ${{ steps.config.outputs.model }}
+            --effort ${{ steps.config.outputs.effort }}
+            --max-turns ${{ steps.config.outputs.max_turns }}
+            --allowedTools "${{ steps.config.outputs.allowed_tools }}"
+            --disallowedTools "${{ steps.config.outputs.disallowed_tools }}"
+            --json-schema '${{ steps.config.outputs.result_schema }}'
 
       - if: always() && steps.comment.outputs.comment_id != '' && steps.start.outputs.skip != 'true'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
