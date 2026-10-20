@@ -101,7 +101,8 @@ jobs:
             --model claude-sonnet-5-5
             --effort medium
             --max-turns 40
-            --allowedTools "Read,Grep,Glob,Bash(git diff:*),Bash(git show:*)"
+            --allowedTools "Read,Grep,Glob,Bash(git show:*)"
+            --disallowedTools "Read(**/.git/**)"
             --json-schema '${{ steps.schema.outputs.schema }}'
 
       - name: Check credentials after the Claude step

@@ -1,6 +1,6 @@
 You are checking whether a pull request will break any Playwright E2E test.
 
-The app code is in the current directory. The E2E tests are in ./e2e. The PR diff is in ./diff.patch and the changed file list is in ./changed-files.txt. You can only read files and run git diff or git show.
+The app code is in the current directory. The E2E tests are in ./e2e. The PR diff is in ./diff.patch and the changed file list is in ./changed-files.txt. You can only read files and run git show.
 
 Steps:
 
